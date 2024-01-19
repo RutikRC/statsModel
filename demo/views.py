@@ -9,6 +9,7 @@ from django.shortcuts import get_object_or_404
 from django.core.files.storage import default_storage
 from django.core.files import File
 from django.http import Http404
+from django.db.models import Case, When, Value, CharField
 
 class StepsModelViewSet(viewsets.ModelViewSet):
     queryset = stepsModel.objects.all()
@@ -40,14 +41,29 @@ class StepsModelViewSet(viewsets.ModelViewSet):
         if not user_id:
             return Response({'error': 'Please provide user id in the query parameters.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Filter stepsModel instances by the provided user ID
-        user_steps = stepsModel.objects.filter(user__id=user_id)
+        # Define the order based on the model_name choices
+        ordering_conditions = [
+            Case(
+                When(model_name=stepsModel.PROJECT_START, then=Value(1)),
+                When(model_name=stepsModel.STRUCTURAL_WORK, then=Value(2)),
+                When(model_name=stepsModel.LAMINATE_WORK, then=Value(3)),
+                When(model_name=stepsModel.HARDWARE_INSTALL, then=Value(4)),
+                When(model_name=stepsModel.FURNISHING_WORK, then=Value(5)),
+                When(model_name=stepsModel.HAND_OVER_AND_FINALIZING, then=Value(6)),
+                default=Value(0),  # default case, if any model_name doesn't match
+                output_field=CharField(),
+            )
+        ]
+
+        # Filter stepsModel instances by the provided user ID and apply custom ordering
+        user_steps = stepsModel.objects.filter(user__id=user_id).order_by(*ordering_conditions)
 
         # Serialize the data
         serializer = StepsModelSerializer(user_steps, many=True)
 
         # Return the response
         return Response(serializer.data)
+
     
 
 class ImageViewSet(viewsets.ModelViewSet):
@@ -86,24 +102,30 @@ class ImageViewSet(viewsets.ModelViewSet):
 
         return response
     
-    def retrieve(self, request, *args, **kwargs):
-    # Check if 'pk' (primary key) is present in URL kwargs
-        if 'pk' in kwargs:
-            steps_model_id = kwargs['pk']
+    @action(detail=False, methods=['GET'], url_path='stepsmodel')
+    def retrieve_by_stepsmodel(self, request, *args, **kwargs):
+        # Get the 'stepsmodel' query parameter from the request
+        steps_model_id = request.query_params.get('id', None)
+        print(f"Steps Model ID: {steps_model_id}")
 
-            # Try to get the associated stepsModel instance
+        if not steps_model_id:
+            return Response({'error': 'Please provide the stepsModel id using the "stepsmodel" query parameter.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Try to get the associated stepsModel instance
         try:
             steps_model = stepsModel.objects.get(id=steps_model_id)
         except stepsModel.DoesNotExist:
             raise Http404("stepsModel does not exist")
 
-        # Retrieve the associated imgTitleStructuralWork instances
+        # Retrieve only the associated imgTitleStructuralWork instances with stepsmodel=3
         img_instances = imgTitleStructuralWork.objects.filter(stepsmodel=steps_model)
 
         # Serialize the data in the desired format
-        response_data = [
-            {
-                'img': img_instance.img.url,
+        response_data = []
+
+        for img_instance in img_instances:
+            img_dict = {
+                'img': request.build_absolute_uri(img_instance.img.url),
                 'title': img_instance.title,
                 'model': {
                     'model_name': steps_model.model_name,
@@ -111,8 +133,7 @@ class ImageViewSet(viewsets.ModelViewSet):
                     'user': steps_model.user.id if steps_model.user else None,
                 },
             }
-            for img_instance in img_instances
-        ]
+            response_data.append(img_dict)
 
         return Response(response_data)
 
