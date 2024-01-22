@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from . models import *
+from django.contrib.auth.models import User
 
 class StepsModelSerializer(serializers.ModelSerializer):
     class Meta:
@@ -22,3 +23,7 @@ class ImgTitleStructuralWorkSerializer(serializers.ModelSerializer):
         return data
     
     
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email']  # Include other fields you want to expose

@@ -10,6 +10,7 @@ from django.core.files.storage import default_storage
 from django.core.files import File
 from django.http import Http404
 from django.db.models import Case, When, Value, CharField
+from django.contrib.auth.models import User
 
 class StepsModelViewSet(viewsets.ModelViewSet):
     queryset = stepsModel.objects.all()
@@ -167,3 +168,8 @@ class ImageViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
         
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [permissions.AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
