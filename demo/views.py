@@ -173,3 +173,7 @@ class UserViewSet(viewsets.ModelViewSet):
     serializer_class = UserSerializer
     permission_classes = [permissions.AllowAny]
     parser_classes = [MultiPartParser, FormParser]
+
+    def get_queryset(self):
+        # Filter users who have associated stepsModel
+        return User.objects.filter(stepsmodel__isnull=False).distinct()
