@@ -11,6 +11,8 @@ from django.core.files import File
 from django.http import Http404
 from django.db.models import Case, When, Value, CharField
 from django.contrib.auth.models import User
+from django.db import transaction
+
 
 class StepsModelViewSet(viewsets.ModelViewSet):
     queryset = stepsModel.objects.all()
@@ -177,3 +179,80 @@ class UserViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         # Filter users who have associated stepsModel
         return User.objects.filter(stepsmodel__isnull=False).distinct()
+    
+    def create(self, request, *args, **kwargs):
+        # Extract user ID from the request data
+        user_id = request.data.get('id', None)
+
+        if not user_id:
+            return Response({'error': 'Please provide user id in the request data.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if the user already has any stepsModel instances
+        existing_steps_models = stepsModel.objects.filter(user__id=user_id)
+
+        if existing_steps_models.exists():
+            # If stepsModel instances exist, return an error response
+            return Response({'error': 'User already has stepsModel instances registered.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # If no stepsModel instances exist, create six instances for the user
+        step_names = [
+            stepsModel.PROJECT_START,
+            stepsModel.STRUCTURAL_WORK,
+            stepsModel.LAMINATE_WORK,
+            stepsModel.HARDWARE_INSTALL,
+            stepsModel.FURNISHING_WORK,
+            stepsModel.HAND_OVER_AND_FINALIZING,
+        ]
+
+        for step_name in step_names:
+            stepsModel.objects.create(model_name=step_name, user_id=user_id)
+
+        # Return a success response
+        return Response({'success': f'Six stepsModel instances created for user with ID {user_id}.'}, status=status.HTTP_201_CREATED)
+
+
+    @transaction.atomic
+    def destroy(self, request, *args, **kwargs):
+        # Extract user ID from the URL parameters
+        user_id = self.kwargs.get('pk', None)
+
+        if not user_id:
+            return Response({'error': 'Please provide user id in the URL parameters.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Use a transaction to ensure atomicity
+            with transaction.atomic():
+                # Get the user
+                user = User.objects.get(id=user_id)
+
+                print(f"Deleting data for user with ID: {user_id}")
+
+                # Get all associated stepsModel instances
+                steps_models = stepsModel.objects.filter(user=user)
+
+                # Loop through each stepsModel instance
+                for steps_model in steps_models:
+                    print(f"Deleting stepsModel instance with ID: {steps_model.id}")
+
+                    # Delete associated images and titles
+                    img_instances = imgTitleStructuralWork.objects.filter(stepsmodel=steps_model)
+                    for img_instance in img_instances:
+                        print(f"Deleting imgTitleStructuralWork instance with ID: {img_instance.id}")
+
+                        # Delete the image file from storage
+                        default_storage.delete(img_instance.img.path)
+                        # Delete the imgTitleStructuralWork instance
+                        img_instance.delete()
+
+                    # Delete the stepsModel instance
+                    steps_model.delete()
+
+            # Return a success response
+            return Response({'success': f'All stepsModel instances, images, and titles deleted for user with ID {user_id}.'}, status=status.HTTP_200_OK)
+
+        except User.DoesNotExist as e:
+            print(e)
+            return Response({'error': f'User with ID {user_id} does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            print(e)
+            return Response({'error': 'An error occurred during deletion.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
