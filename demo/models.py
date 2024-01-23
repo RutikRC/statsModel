@@ -29,7 +29,7 @@ class stepsModel(models.Model):
     
 class imgTitleStructuralWork(models.Model):
     title = models.CharField(max_length=100)
-    img = models.ImageField(upload_to='structural_work_images/')  # You might want to adjust the upload_to path
+    img = models.ImageField(upload_to='execution_work_images/')  # You might want to adjust the upload_to path
     stepsmodel = models.ForeignKey(stepsModel, on_delete=models.CASCADE)
 
     def __str__(self):
