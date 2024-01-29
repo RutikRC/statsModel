@@ -178,7 +178,20 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         # Filter users who have associated stepsModel
+        #return User.objects.filter(stepsmodel__isnull=False).distinct()
+        
+        # Get the query parameter 'has_steps_model' from the request
+        has_steps_model = self.request.query_params.get('has_steps_model', None)
+
+        if has_steps_model == 'false':
+            # Filter users who have not created any stepsModel instances
+              return User.objects.filter(stepsmodel__isnull=True).distinct()
+
+        # If the parameter is not provided or set to 'true', return all users
         return User.objects.filter(stepsmodel__isnull=False).distinct()
+        
+    
+    
     
     def create(self, request, *args, **kwargs):
         # Extract user ID from the request data
